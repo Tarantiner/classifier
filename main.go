@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"classifier/utils"
 	"flag"
 	"fmt"
@@ -10,11 +11,15 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 var err error
 var root string
 var srcPath string
+var wg sync.WaitGroup
+var ch chan struct{} = make(chan struct{}, 12)
 
 func checkPath(dr string) bool {
 	_, err = os.Stat(dr)
@@ -51,10 +56,13 @@ func initCateDir() {
 
 func doRealCopy(src, dst string) {
 	cmd := exec.Command("cmd", "/C", "xcopy", src, dst)
-	_, err = cmd.Output()
-	if err != nil {
-		log.Printf("复制文件【%v】到【%v】失败：%v\n", src, dst, err)
-	}
+
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	cmd.Run()
+	//_, err = cmd.Output()
 }
 
 func copyFile(ph string, info os.FileInfo, err error) error {
@@ -70,7 +78,15 @@ func copyFile(ph string, info os.FileInfo, err error) error {
 				if checkPath(dName) {
 					continue
 				}
-				doRealCopy(ph, dPath)
+				wg.Add(1)
+				ch <- struct{}{}
+				go func(){
+					defer func(){
+						wg.Done()
+						<- ch
+					}()
+					doRealCopy(ph, dPath)
+				}()
 			}
 		}
 	}
@@ -83,6 +99,7 @@ func classifyAll() {
 	if err != nil {
 		log.Fatalln("遍历源文件过程中失败：", err)
 	}
+	wg.Wait()
 	fmt.Println("所有文件完成分类！")
 }
 
@@ -102,6 +119,8 @@ func init() {
 }
 
 func main() {
+	s := time.Now()
 	initCateDir()
 	classifyAll()
+	fmt.Printf("一共花费%v秒", time.Since(s))
 }
