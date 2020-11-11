@@ -1,29 +1,36 @@
 package utils
 
 import (
+	"io/ioutil"
 	"log"
 	"strings"
-
-	"gopkg.in/ini.v1"
 )
 
-var err error
 var CateDic map[string][]string
 
 func init() {
-	f, err := ini.Load("conf.ini")
-	if err != nil {
-		log.Fatalln("读取文件失败：", err)
-	}
-	loadCates(f)
-}
-
-func loadCates(f *ini.File) {
 	CateDic = make(map[string][]string)
-	s := f.Section("video").Key("cates").String()
-	for _, txt := range strings.Split(s, " ") {
-		s := strings.Split(txt, ":")
-		cate, patt := s[0], s[1]
-		CateDic[cate] = strings.Split(patt, ",")
+	b, err := ioutil.ReadFile("conf.ini")
+	if err != nil {
+		log.Fatalln("打开配置文件失败")
+	}
+	lineLis := strings.Split(string(b), "\r\n")
+	var section string
+	for _, line := range lineLis {
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			s := strings.TrimSpace(line[1 : len(line)-1])
+			if len(s) > 0 {
+				section = s
+			}
+			continue
+		}
+		s := strings.TrimSpace(line)
+		if len(s) > 0 {
+			if lis, ok := CateDic[section]; !ok {
+				CateDic[section] = []string{s}
+			} else {
+				CateDic[section] = append(lis, s)
+			}
+		}
 	}
 }
